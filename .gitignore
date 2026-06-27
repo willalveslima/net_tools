@@ -107,3 +107,14 @@ database/
 # Agents
 # -------------------------
 .agents/
+
+# -------------------------
+# workspace
+# -------------------------
+*.code-workspace
+workspace/
+
+# -------------------------
+# antigravity projeto
+# -------------------------
+production_artifacts/

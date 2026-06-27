@@ -1,31 +1,17 @@
 import json
-import sqlite3
 from datetime import datetime
 
 import pandas as pd
 import streamlit as st
 
 from net_tools.state import init_state
+from net_tools.db import load_test_history
 
 init_state()
 
 st.title("📜 Histórico de Testes")
 
-DB_NAME = "net_tools.db"
-
-
-# ========= DB =========
-def load_data():
-    conn = sqlite3.connect(DB_NAME)
-    df = pd.read_sql_query(
-        "SELECT * FROM test_results ORDER BY id DESC",
-        conn
-    )
-    conn.close()
-    return df
-
-
-df = load_data()
+df = load_test_history()
 
 if df.empty:
     st.warning("Nenhum teste registrado ainda.")

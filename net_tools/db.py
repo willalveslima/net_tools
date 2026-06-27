@@ -11,36 +11,30 @@ def get_connection():
 
 
 def init_db():
-    conn = get_connection()
-    cursor = conn.cursor()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS test_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS test_results (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp TEXT,
+            target TEXT,
+            origin_ip TEXT,
+            destination_ip TEXT,
 
-        target TEXT,
-        origin_ip TEXT,
-        destination_ip TEXT,
+            avg_ping REAL,
+            packet_loss REAL,
 
-        avg_ping REAL,
-        packet_loss REAL,
+            open_ports INTEGER,
+            total_hops INTEGER,
 
-        open_ports INTEGER,
-        total_hops INTEGER,
-
-        raw_json TEXT
-    )
-    """)
-
-    conn.commit()
-    conn.close()
+            raw_json TEXT
+        )
+        """)
+        conn.commit()
 
 
 def save_test_result(result: dict):
-    conn = get_connection()
-    cursor = conn.cursor()
-
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     target = result.get("target")
@@ -68,29 +62,42 @@ def save_test_result(result: dict):
 
     raw_json = json.dumps(result)
 
-    cursor.execute("""
-    INSERT INTO test_results (
-        timestamp,
-        target,
-        origin_ip,
-        destination_ip,
-        avg_ping,
-        packet_loss,
-        open_ports,
-        total_hops,
-        raw_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        timestamp,
-        target,
-        origin_ip,
-        destination_ip,
-        avg_ping,
-        packet_loss,
-        open_ports,
-        total_hops,
-        raw_json
-    ))
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+        INSERT INTO test_results (
+            timestamp,
+            target,
+            origin_ip,
+            destination_ip,
+            avg_ping,
+            packet_loss,
+            open_ports,
+            total_hops,
+            raw_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            timestamp,
+            target,
+            origin_ip,
+            destination_ip,
+            avg_ping,
+            packet_loss,
+            open_ports,
+            total_hops,
+            raw_json
+        ))
+        conn.commit()
 
-    conn.commit()
-    conn.close()
+
+def load_test_history():
+    """
+    Retorna o histórico completo de testes como um DataFrame do Pandas.
+    """
+    import pandas as pd
+    with get_connection() as conn:
+        df = pd.read_sql_query(
+            "SELECT * FROM test_results ORDER BY id DESC",
+            conn
+        )
+    return df

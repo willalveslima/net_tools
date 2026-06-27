@@ -184,8 +184,8 @@ if result:
             df_view = df[cols]
 
             styled = df_view.style \
-                .applymap(lambda v: color_mtr(v, "lat"), subset=["min_ms","avg_ms","max_ms"]) \
-                .applymap(lambda v: color_mtr(v, "loss"), subset=["packet_loss_percent"])
+                .map(lambda v: color_mtr(v, "lat"), subset=["min_ms","avg_ms","max_ms"]) \
+                .map(lambda v: color_mtr(v, "loss"), subset=["packet_loss_percent"])
 
             st.dataframe(styled, use_container_width=True)
 

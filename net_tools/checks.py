@@ -24,6 +24,65 @@ def dns_test(target: str) -> Dict[str, object]:
     return resolve_dns(target)
 
 
+def dns_query_all(target: str) -> Dict[str, list]:
+    """
+    Executa consultas avançadas de DNS para múltiplos tipos de registros.
+    """
+    record_types = ["A", "AAAA", "MX", "TXT", "CNAME", "NS", "SOA"]
+    results = {}
+
+    try:
+        import dns.resolver
+    except ImportError:
+        # Fallback caso dnspython não esteja instalado no ambiente virtual
+        simple = resolve_dns(target)
+        if simple.get("success"):
+            return {
+                "A": [{"Valor": addr} for addr in simple.get("addresses", [])],
+                "_warning": ["Instale a biblioteca dnspython para obter mais registros DNS."]
+            }
+        return {"error": ["dnspython não instalado e resolução simples falhou."]}
+
+    resolver = dns.resolver.Resolver()
+    resolver.timeout = 2.0
+    resolver.lifetime = 2.0
+
+    for rtype in record_types:
+        results[rtype] = []
+        try:
+            answers = resolver.resolve(target, rtype)
+            for rdata in answers:
+                if rtype == "MX":
+                    results[rtype].append({
+                        "Preferência": rdata.preference,
+                        "Servidor": str(rdata.exchange).rstrip(".")
+                    })
+                elif rtype == "SOA":
+                    results[rtype].append({
+                        "MName": str(rdata.mname).rstrip("."),
+                        "RName": str(rdata.rname).rstrip("."),
+                        "Serial": rdata.serial,
+                        "Refresh": rdata.refresh,
+                        "Retry": rdata.retry,
+                        "Expire": rdata.expire,
+                        "Minimum": rdata.minimum
+                    })
+                elif rtype == "TXT":
+                    val = "".join(b.decode('utf-8', errors='ignore') for b in rdata.strings)
+                    results[rtype].append({"Valor": val})
+                else:
+                    results[rtype].append({"Valor": str(rdata).rstrip(".")})
+        except (dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+            continue
+        except dns.resolver.NXDOMAIN:
+            results["error"] = [{"Erro": f"Domínio {target} não encontrado (NXDOMAIN)."}]
+            break
+        except Exception as e:
+            results[rtype].append({"Erro": str(e)})
+
+    return results
+
+
 def ping_test(
     target: str,
     count: int = 4,

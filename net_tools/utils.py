@@ -382,7 +382,11 @@ def get_dns_server():
 
             import re
 
-            match = re.search(r"DNS Servers[ .:]*([\d\.]+)", result)
+            match = re.search(
+                r"(?:DNS Servers|Servidores DNS|Servidor DNS)[ .:]*([\d\.]+)",
+                result,
+                re.IGNORECASE
+            )
             if match:
                 return match.group(1)
 
