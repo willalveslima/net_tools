@@ -199,6 +199,15 @@ def traceroute_test(
 
     result["hops"] = hops
 
+    # Gravação do caminho descoberto no banco de dados do mapa de rede
+    try:
+        from .db import save_traceroute_path
+        from .utils import get_local_ip
+        local_ip = get_local_ip()
+        save_traceroute_path(local_ip, hops, target)
+    except Exception:
+        pass
+
     return result
 
 
@@ -467,3 +476,70 @@ def run_all_tests(
     )
 
     return output
+
+
+def subnet_scan_test(
+    cidr: str,
+    timeout_ms: int = 300,
+    max_workers: int = 50,
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
+) -> List[Dict[str, object]]:
+    """
+    Varre uma subrede CIDR em busca de hosts ativos respondendo a PING (ICMP).
+    Resolve hostnames reverso em paralelo para os hosts ativos encontrados.
+    """
+    import ipaddress
+
+    try:
+        network = ipaddress.ip_network(cidr, strict=False)
+    except Exception as e:
+        raise ValueError(f"Subrede CIDR inválida: {cidr}. Erro: {e}")
+
+    hosts = [str(ip) for ip in network.hosts()]
+    total_hosts = len(hosts)
+
+    if total_hosts == 0:
+        return []
+
+    active_hosts = []
+
+    # 1. Função executora para testar cada IP de forma assíncrona
+    def test_single_ip(ip_str: str) -> Optional[Dict[str, object]]:
+        # Envia 1 pacote de ping com timeout curto
+        ping = ping_test(ip_str, count=1, timeout_ms=timeout_ms)
+        summary = ping.get("summary", {})
+        loss = summary.get("packet_loss_percent")
+
+        # Se perda < 100%, o host respondeu
+        if loss is not None and loss < 100:
+            avg_ms = summary.get("avg_ms") or 0.0
+            # Resolve DNS reverso para o host ativo
+            hostname = reverse_dns(ip_str, timeout=1.0)
+            return {
+                "ip": ip_str,
+                "hostname": hostname or "",
+                "latency_ms": avg_ms
+            }
+        return None
+
+    # 2. Executar em paralelo usando ThreadPoolExecutor
+    completed = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(test_single_ip, ip): ip for ip in hosts}
+
+        for future in as_completed(futures):
+            res = future.result()
+            if res:
+                active_hosts.append(res)
+
+            completed += 1
+            if progress_callback:
+                progress_callback(
+                    completed,
+                    total_hosts,
+                    f"Escaneando IP {futures[future]}"
+                )
+
+    # Retorna ordenado pelo IP
+    return sorted(active_hosts, key=lambda x: ipaddress.ip_address(x["ip"]))
+
