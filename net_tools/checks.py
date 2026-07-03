@@ -546,3 +546,150 @@ def subnet_scan_test(
     # Retorna ordenado pelo IP
     return sorted(active_hosts, key=lambda x: ipaddress.ip_address(x["ip"]))
 
+
+def service_curl_test(
+    url: str,
+    timeout_s: int = 10,
+    insecure: bool = True,
+) -> Dict[str, object]:
+    """
+    Executa teste de conectividade HTTP de um serviço usando o comando curl.
+    Extrai os tempos de resolução DNS, conexão TCP, TLS handshake, TTFB e total.
+    """
+    import re
+    
+    cmd = ["curl"]
+
+    # String de formato de write-out
+    write_out_format = (
+        "DNS: %{time_namelookup}s\\n"
+        "Connect: %{time_connect}s\\n"
+        "TLS: %{time_appconnect}s\\n"
+        "TTFB: %{time_starttransfer}s\\n"
+        "Total: %{time_total}s\\n"
+        "HTTP: %{http_code}\\n"
+    )
+
+    cmd.extend(["-w", write_out_format])
+    cmd.extend(["-o", "NUL"])
+    cmd.extend(["-s"])
+    cmd.extend(["-m", str(timeout_s)])
+
+    if insecure:
+        cmd.append("-k")
+
+    cmd.append(url)
+
+    # Executa
+    res = run_command(cmd, timeout=timeout_s + 5)
+
+    stdout = res.get("stdout") or ""
+    stderr = res.get("stderr") or ""
+
+    # Mapeamento padrão dos resultados
+    parsed = {
+        "url": url,
+        "success": False,
+        "dns_ms": None,
+        "connect_ms": None,
+        "tls_ms": None,
+        "ttfb_ms": None,
+        "total_ms": None,
+        "http_code": None,
+        "stdout": stdout,
+        "stderr": stderr,
+        "error": None
+    }
+
+    if res.get("timeout"):
+        parsed["error"] = f"Timeout da requisição após {timeout_s}s"
+        return parsed
+
+    if res.get("returncode") != 0:
+        parsed["error"] = stderr.strip() or f"Erro na execução do curl (Código {res.get('returncode')})"
+
+    # Fazer o parsing da saída
+    dns_match = re.search(r"DNS:\s*([\d\.]+)s", stdout)
+    connect_match = re.search(r"Connect:\s*([\d\.]+)s", stdout)
+    tls_match = re.search(r"TLS:\s*([\d\.]+)s", stdout)
+    ttfb_match = re.search(r"TTFB:\s*([\d\.]+)s", stdout)
+    total_match = re.search(r"Total:\s*([\d\.]+)s", stdout)
+    http_match = re.search(r"HTTP:\s*(\d+)", stdout)
+
+    try:
+        if dns_match:
+            parsed["dns_ms"] = round(float(dns_match.group(1)) * 1000, 2)
+        if connect_match:
+            parsed["connect_ms"] = round(float(connect_match.group(1)) * 1000, 2)
+        if tls_match:
+            parsed["tls_ms"] = round(float(tls_match.group(1)) * 1000, 2)
+        if ttfb_match:
+            parsed["ttfb_ms"] = round(float(ttfb_match.group(1)) * 1000, 2)
+        if total_match:
+            parsed["total_ms"] = round(float(total_match.group(1)) * 1000, 2)
+        if http_match:
+            code = int(http_match.group(1))
+            parsed["http_code"] = code
+
+        # Consideramos sucesso se obtivemos um código HTTP válido e maior que zero
+        if parsed["http_code"] is not None and parsed["http_code"] > 0:
+            parsed["success"] = True
+        else:
+            parsed["success"] = False
+            if not parsed["error"]:
+                parsed["error"] = "Não foi possível estabelecer conexão com o servidor."
+    except Exception as ex:
+        parsed["error"] = f"Erro ao analisar saída do curl: {ex}"
+
+    return parsed
+
+
+def service_curl_batch_test(
+    urls: List[str],
+    timeout_s: int = 10,
+    insecure: bool = True,
+    max_workers: int = 5,
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
+) -> List[Dict[str, object]]:
+    """
+    Executa testes de latência curl para múltiplas URLs em paralelo.
+    """
+    results = []
+    total = len(urls)
+
+    if total == 0:
+        return []
+
+    completed = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Mapeia futuros
+        futures = {
+            executor.submit(service_curl_test, url, timeout_s, insecure): url
+            for url in urls
+        }
+
+        for future in as_completed(futures):
+            url = futures[future]
+            try:
+                res = future.result()
+                results.append(res)
+            except Exception as e:
+                results.append({
+                    "url": url,
+                    "success": False,
+                    "error": str(e)
+                })
+
+            completed += 1
+            if progress_callback:
+                progress_callback(
+                    completed,
+                    total,
+                    f"Testando serviço {url}"
+                )
+
+    # Ordenar pela ordem original das URLs
+    url_to_index = {url: idx for idx, url in enumerate(urls)}
+    return sorted(results, key=lambda x: url_to_index.get(x["url"], 999))
+
+
