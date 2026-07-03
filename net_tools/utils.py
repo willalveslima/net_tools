@@ -181,11 +181,12 @@ def ping_command(host: str, count: int = 4, timeout_ms: int = 1000) -> List[str]
     return ["ping", "-c", str(count), "-W", str(timeout_s), host]
 
 
-def traceroute_command(host: str, max_hops: int = 30) -> List[str]:
+def traceroute_command(host: str, max_hops: int = 30, timeout_ms: int = 1000) -> List[str]:
     if sys.platform.startswith("win"):
-        return ["tracert", "-d", "-h", str(max_hops), host]
+        return ["tracert", "-d", "-h", str(max_hops), "-w", str(timeout_ms), host]
 
-    return ["traceroute", "-n", "-m", str(max_hops), host]
+    timeout_s = max(1, int(timeout_ms / 1000))
+    return ["traceroute", "-n", "-m", str(max_hops), "-w", str(timeout_s), host]
 
 
 def parse_ping_summary(output: str) -> Dict[str, Optional[float]]:

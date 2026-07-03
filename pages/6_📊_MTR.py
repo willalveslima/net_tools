@@ -39,6 +39,7 @@ if st.button("Executar MTR-like", type="primary", use_container_width=True):
             resolve_names=config["resolve_hop_hostnames"],
             reverse_dns_timeout_s=config["reverse_dns_timeout_s"],
             max_workers=config["max_workers"],
+            timeout_ms=config["timeout_ms"]
         )
 
         hops = trace.get("hops", [])

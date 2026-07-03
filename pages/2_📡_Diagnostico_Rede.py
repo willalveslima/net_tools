@@ -46,7 +46,8 @@ if st.button("Executar diagnóstico", type="primary", use_container_width=True):
             max_hops=config["max_hops"],
             resolve_names=config["resolve_hop_hostnames"],
             reverse_dns_timeout_s=config["reverse_dns_timeout_s"],
-            max_workers=config["max_workers"]
+            max_workers=config["max_workers"],
+            timeout_ms=config["timeout_ms"]
         )
 
         progress.progress(1.0)

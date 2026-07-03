@@ -1,7 +1,7 @@
 import sqlite3
 import json
 from datetime import datetime
-
+from typing import Optional
 
 DB_NAME = "net_tools.db"
 
@@ -352,7 +352,7 @@ def get_last_subnet_scan(subnet_id: int) -> Optional[dict]:
     """
     Retorna o scan mais recente executado para uma subrede, se houver.
     """
-    from typing import Optional
+
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()

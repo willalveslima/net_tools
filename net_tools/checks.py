@@ -169,6 +169,7 @@ def traceroute_test(
     reverse_dns_timeout_s: float = 2.0,
     max_workers: int = 8,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
+    timeout_ms: int = 1000,
 ) -> Dict[str, object]:
     """
     Executa tracert/traceroute.
@@ -183,8 +184,9 @@ def traceroute_test(
         traceroute_command(
             target,
             max_hops=max_hops,
+            timeout_ms=timeout_ms,
         ),
-        timeout=60,
+        timeout=max(120, max_hops * 4),
     )
 
     hops = extract_hops_from_traceroute(result.get("stdout", ""))
@@ -435,6 +437,7 @@ def run_all_tests(
         reverse_dns_timeout_s=reverse_dns_timeout_s,
         max_workers=max_workers,
         progress_callback=None,
+        timeout_ms=timeout_ms,
     )
 
     output["hops"] = output["traceroute"].get("hops", [])
